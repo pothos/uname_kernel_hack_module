@@ -1,0 +1,50 @@
+modifying kernel space – uname hack revamped: changed to modify what you want instead of just machine
+
+This change of the original uname hack kernel module ( http://sourceforge.net/projects/uname-hack/ ) was laying unreleased and forgotten on the disk, but after some tweaking to support all options, here it comes — ugly and not meant for serious usage.
+
+Some months ago I modified it to not change the machine from e.g. amd64 to i386 but the kernel version. Curiously to solve an issue it itself is having in the second line of the Makefile (uname -r); some actions rely on the kernel version to access the actual initramdisk or kernel headers. These might be different versions within guest system containers and led to the ugly hack of overwriting the kernel struct (yes, we are on Linux, not GNU Hurd) where the uname tool gets it’s release version from:
+
+struct new_utsname {
+  char sysname[__NEW_UTS_LEN + 1];
+  char nodename[__NEW_UTS_LEN + 1];
+  char release[__NEW_UTS_LEN + 1];
+  char version[__NEW_UTS_LEN + 1];
+  char machine[__NEW_UTS_LEN + 1];
+  char domainname[__NEW_UTS_LEN + 1];
+};
+
+At initialisation the module saves the original value of e.g. sysname and overwrites the kernel space struct with the value you want. After usage, when the module is unloaded, the original value will be restored.
+
+So when using the provided Makefile you could test how your system looks like when pretending to be something else:
+
+$ make KRELEASE=2.5.2-0 KSYSNAME=Minix KVERSION="Debian 2.5 (2012-03-04)" KMACHINE=i386 test
+
+The output while running make could look like:
+
+  $ uname -a
+  Linux hstnm 3.10-2-amd64 #1 SMP Debian 3.10.5-1 (2013-08-07) x86_64 GNU/Linux
+  $ sudo /sbin/insmod unamehack.ko
+  [sudo] password for kai: 
+  $ uname -a
+  Minix hstnm 2.5.2-0 Debian 2.5 (2012-03-04) i386 GNU/Linux
+  $ sudo /sbin/rmmod unamehack
+  $ uname -a
+  Linux hstnm 3.10-2-amd64 #1 SMP Debian 3.10.5-1 (2013-08-07) x86_64 GNU/Linux
+
+So a longer usage would require you to enter
+
+$ make KMACHINE=i386 insertunamemodule
+
+and revert the changes as soon as possible by
+
+$ make removeunamemodule
+
+So, good luck! You’ll better not use it and try to fix cases where it’s necessary.
+
+Copyright (C) 2014 various folks as stated in the header changelog of unamehack.c
+
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110, USA
